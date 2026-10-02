@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 import otp_service
+from celery_app import send_otp_sms
 
 app = FastAPI(title="OTP Service")
 
@@ -29,9 +30,12 @@ def send_otp(data: SendRequest):
 
     print(f"[SMS] Sending {code} to {data.phone}")
 
+    task = send_otp_sms.delay(data.phone, code)
+
     return {
         "success": True,
         "message": "OTP sent",
+        "task_id": task.id,
         "expires_in": otp_service.OTP_EXPIRY
     }
 
