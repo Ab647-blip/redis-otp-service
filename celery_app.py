@@ -1,4 +1,5 @@
 import time
+import random
 from celery import Celery
 
 celery_app = Celery(
@@ -14,12 +15,20 @@ celery_app.conf.update(
 )
 
 
-@celery_app.task
-def send_otp_sms(phone, code):
-    """Pretend to send an SMS. Real providers take 2-3 seconds."""
-    print(f"[WORKER] Sending OTP to {phone}...")
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=5)
+def send_otp_sms(self, phone, code):
+    attempt = self.request.retries + 1
 
-    time.sleep(3)   # fake SMS provider delay
+    print("")
+    print(f"=== ATTEMPT {attempt} for {phone} ===")
+    print(f"    Code: {code}")
 
-    print(f"[WORKER] Sent {code} to {phone}")
-    return {"phone": phone, "status": "sent"}
+    time.sleep(2)
+
+    # Fail on attempts 1 and 2. Succeed on attempt 3.
+    if attempt < 3:
+        print(f"    RESULT: failed. Retrying in 5 seconds...")
+        raise self.retry(exc=Exception("SMS provider down"))
+
+    print(f"    RESULT: sent successfully!")
+    return {"phone": phone, "status": "sent", "attempts": attempt}

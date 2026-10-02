@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from celery.result import AsyncResult
+from celery_app import celery_app, send_otp_sms
+
 import otp_service
 from celery_app import send_otp_sms
 
@@ -67,3 +70,14 @@ def verify_otp(data: VerifyRequest):
     otp_service.delete_otp(data.phone)
     otp_service.clear_attempts(data.phone)
     return {"success": True, "message": "Verified"}
+
+
+@app.get("/task-status/{task_id}")
+def task_status(task_id: str):
+    result = AsyncResult(task_id, app=celery_app)
+
+    return {
+        "task_id": task_id,
+        "status": result.status,
+        "result": result.result if result.ready() else None
+    }
