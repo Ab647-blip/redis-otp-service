@@ -7,6 +7,8 @@ from celery_app import celery_app, send_otp_sms
 import otp_service
 from celery_app import send_otp_sms
 
+from events import publish_event
+
 app = FastAPI(title="OTP Service")
 
 
@@ -17,6 +19,11 @@ class SendRequest(BaseModel):
 class VerifyRequest(BaseModel):
     phone: str
     code: str
+
+
+@app.get("/stats")
+def stats():
+    return otp_service.get_stats()
 
 
 @app.post("/send-otp")
@@ -34,6 +41,8 @@ def send_otp(data: SendRequest):
     print(f"[SMS] Sending {code} to {data.phone}")
 
     task = send_otp_sms.delay(data.phone, code)
+
+    publish_event("otp_sent", {"phone": data.phone})
 
     return {
         "success": True,
@@ -56,6 +65,7 @@ def verify_otp(data: VerifyRequest):
         if attempts >= otp_service.MAX_ATTEMPTS:
             otp_service.delete_otp(data.phone)
             otp_service.clear_attempts(data.phone)
+            publish_event("otp_locked", {"phone": data.phone})
             return {
                 "success": False,
                 "message": "Too many wrong attempts. Request a new OTP."
@@ -69,6 +79,7 @@ def verify_otp(data: VerifyRequest):
 
     otp_service.delete_otp(data.phone)
     otp_service.clear_attempts(data.phone)
+    publish_event("otp_verified", {"phone": data.phone})
     return {"success": True, "message": "Verified"}
 
 
